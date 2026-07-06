@@ -53,3 +53,19 @@ public func formatRemaining(_ seconds: Int) -> String {
     let secondText = remainder < 10 ? "0\(remainder)" : "\(remainder)"
     return "\(minuteText):\(secondText)"
 }
+
+public func progressFraction(for state: WorkSessionState, durationSeconds: Int) -> Double {
+    guard durationSeconds > 0 else {
+        return 0
+    }
+
+    switch state {
+    case .idle, .dayEnded:
+        return 0
+    case .breakDue:
+        return 1
+    case .running(let remainingSeconds):
+        let completedSeconds = durationSeconds - remainingSeconds
+        return min(1, max(0, Double(completedSeconds) / Double(durationSeconds)))
+    }
+}

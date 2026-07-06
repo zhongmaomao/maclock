@@ -9,7 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     private var session = WorkSession()
     private var timer: Timer?
     private var window: NSWindow?
-    private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+    private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -23,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
     func startWork() {
         state = session.start(nowSeconds: Date().timeIntervalSinceReferenceDate)
+        updateStatusIcon()
         timer?.invalidate()
 
         let timer = Timer(timeInterval: 1, target: self, selector: #selector(timerFired), userInfo: nil, repeats: true)
@@ -36,13 +37,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         timer?.invalidate()
         timer = nil
         state = session.dayEnd()
+        updateStatusIcon()
     }
 
     private func configureStatusItem() {
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "lock.fill", accessibilityDescription: "MacLock")
             button.imagePosition = .imageOnly
+            button.imageScaling = .scaleProportionallyDown
+            button.toolTip = "MacLock"
         }
+        updateStatusIcon()
 
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Open MacLock", action: #selector(openFromMenu), keyEquivalent: ""))
@@ -82,6 +86,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
     @objc private func timerFired() {
         state = session.tick(nowSeconds: Date().timeIntervalSinceReferenceDate)
+        updateStatusIcon()
         if case .breakDue = state {
             timer?.invalidate()
             timer = nil
@@ -99,6 +104,70 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
     @objc private func quitFromMenu() {
         NSApp.terminate(nil)
+    }
+
+    private func updateStatusIcon() {
+        let progress = progressFraction(for: state, durationSeconds: session.durationSeconds)
+        statusItem.button?.image = makeStatusIcon(progress: progress, trackAlpha: statusIconTrackAlpha)
+    }
+
+    private var statusIconTrackAlpha: CGFloat {
+        switch state {
+        case .idle:
+            return 0.35
+        case .running:
+            return 0.22
+        case .breakDue:
+            return 0.16
+        case .dayEnded:
+            return 0.18
+        }
+    }
+
+    private func makeStatusIcon(progress: Double, trackAlpha: CGFloat) -> NSImage {
+        let imageSize = NSSize(width: 18, height: 18)
+        let lineWidth: CGFloat = 2.25
+        let rect = NSRect(
+            x: 2.125,
+            y: 2.125,
+            width: imageSize.width - 4.25,
+            height: imageSize.height - 4.25
+        )
+        let clampedProgress = min(1, max(0, progress))
+        let image = NSImage(size: imageSize)
+
+        image.lockFocus()
+
+        let trackPath = NSBezierPath(ovalIn: rect)
+        trackPath.lineWidth = lineWidth
+        trackPath.lineCapStyle = .round
+        NSColor.black.withAlphaComponent(trackAlpha).setStroke()
+        trackPath.stroke()
+
+        if clampedProgress > 0 {
+            let progressPath = NSBezierPath()
+            if clampedProgress >= 0.999 {
+                progressPath.appendOval(in: rect)
+            } else {
+                let center = NSPoint(x: imageSize.width / 2, y: imageSize.height / 2)
+                progressPath.appendArc(
+                    withCenter: center,
+                    radius: rect.width / 2,
+                    startAngle: 90,
+                    endAngle: 90 - 360 * clampedProgress,
+                    clockwise: true
+                )
+            }
+
+            progressPath.lineWidth = lineWidth
+            progressPath.lineCapStyle = .round
+            NSColor.black.setStroke()
+            progressPath.stroke()
+        }
+
+        image.unlockFocus()
+        image.isTemplate = true
+        return image
     }
 }
 
