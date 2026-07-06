@@ -8,7 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
     private var session = WorkSession()
     private var timer: Timer?
-    private var window: NSWindow?
+    private var window: NSPanel?
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -29,8 +29,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         let timer = Timer(timeInterval: 1, target: self, selector: #selector(timerFired), userInfo: nil, repeats: true)
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
-
-        closeWindow()
     }
 
     func dayEnd() {
@@ -56,8 +54,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         statusItem.menu = menu
     }
 
-    private func makeWindow() -> NSWindow {
-        let window = NSWindow(
+    private func makeWindow() -> NSPanel {
+        let window = MacLockPanel(
             contentRect: NSRect(x: 0, y: 0, width: 300, height: 280),
             styleMask: [.titled, .closable],
             backing: .buffered,
@@ -65,9 +63,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         )
         window.title = "MacLock"
         window.isReleasedWhenClosed = false
+        keepWindowOnTop(window)
         window.contentViewController = NSHostingController(rootView: MacLockView(app: self))
         window.center()
         return window
+    }
+
+    private func keepWindowOnTop(_ window: NSPanel) {
+        window.isFloatingPanel = true
+        window.level = .floating
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        window.hidesOnDeactivate = false
     }
 
     private func showWindow() {
@@ -75,8 +81,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             window = makeWindow()
         }
 
-        window?.center()
-        window?.makeKeyAndOrderFront(nil)
+        guard let window else { return }
+
+        keepWindowOnTop(window)
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -168,6 +178,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         image.unlockFocus()
         image.isTemplate = true
         return image
+    }
+}
+
+private final class MacLockPanel: NSPanel {
+    override var canBecomeKey: Bool {
+        true
+    }
+
+    override var canBecomeMain: Bool {
+        true
     }
 }
 
